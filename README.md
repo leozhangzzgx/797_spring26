@@ -18,3 +18,13 @@ Student: Leo Zhang
 
 xz277@duke.edu
 
+
+Instructor
+Luana Medeiros Marangon Lima
+luana.marangon.lima@duke.edu
+
+
+Student
+Leo Zhang
+xz277@duke.edu
+

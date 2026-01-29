@@ -1,0 +1,140 @@
+---
+title: "ENV 790.30 - Time Series Analysis for Energy Data | Spring 2026"
+author: "Leo Zhang"
+subtitle: "Assignment 2 - Due date 01/27/26"
+output:
+  html_document:
+    df_print: paged
+geometry: margin = 2.54cm
+---
+
+## Submission Instructions
+
+You should open the .rmd file corresponding to this assignment on RStudio. The file is available on our class repository on Github.   
+
+Once you have the file open on your local machine the first thing you will do is rename the file such that it includes your first and last name (e.g., 'LuanaLima_TSA_A02_Sp24.Rmd'). Then change 'Student Name' on line 4 with your name. 
+
+Then you will start working through the assignment by  **creating code and output** that answer each question. Be sure to use this assignment document. Your report should contain the answer to each question and any plots/tables you obtained (when applicable).
+
+When you have completed the assignment, **Knit** the text and code into a single PDF file. Submit this pdf using Sakai. 
+
+## R packages
+
+R packages needed for this assignment:'forecast', 'tseries', and 'dplyr'. Install these packages, if you haven't done yet. Do not forget to load them before running your script, since they are NOT default packages.\\
+
+
+```{r, message = FALSE, warning = FALSE}
+library(forecast)
+library(gt)
+library(readxl)
+library(tidyverse)
+library(tseries)
+```
+
+
+## Data set information  
+
+Consider the data provided in the spreadsheet 'Table_10.1_Renewable_Energy_Production_and_Consumption_by_Source.xlsx' on our **Data** folder. The data comes from the US Energy Information and Administration and corresponds to the December 2023 Monthly Energy Review. The spreadsheet is ready to be used. You will also find a $.csv$ version of the data install.packages(forecast)
+install.packages(tseries). You may use the function $read.table()$ to import the $.csv$ data in R. Or refer to the file 'M2_ImportingData_CSV_XLSX.Rmd' in our Lessons folder for functions that are better suited for importing the $.xlsx$.
+
+```{r, message = FALSE, warning = FALSE}
+outlook <- read_excel('C:/Users/24169/Desktop/e797/797_spring26/Data/Table_10.1_Renewable_Energy_Production_and_Consumption_by_Source.xlsx', sheet = 'Annual Data', skip = 10)
+```
+
+
+## Question 1
+You will work only with the following columns: Total Biomass Energy Production, Total Renewable Energy Production, Hydroelectric Power Consumption. Create a data frame structure with these three time series only. Use the command head() to verify your data.
+
+```{r, message = FALSE, warning = FALSE}
+outlook <- outlook[-c(1), ]
+outlook <- outlook %>% select('Total Biomass Energy Production', 'Total Renewable Energy Production', 'Hydroelectric Power Consumption')
+outlook <- outlook %>% mutate(across(c('Total Biomass Energy Production', 'Total Renewable Energy Production', 'Hydroelectric Power Consumption'), as.numeric))
+head(outlook)
+```
+
+
+## Question 2
+Transform your data frame in a time series object and specify the starting point and frequency of the time series using the function ts().
+
+```{r, message = FALSE, warning = FALSE}
+history <- ts(outlook, start = 1949, end = 2023, frequency = 1)
+history
+```
+
+
+## Question 3
+Compute mean and standard deviation for these three series.
+
+```{r, message = FALSE, warning = FALSE}
+statement <- c('Mean', 'Standard Deviation')
+biomass <- history[, 'Total Biomass Energy Production']
+first_statistic <- c(mean(biomass), sd(biomass))
+renewable <- history[, 'Total Renewable Energy Production']
+second_statistic <- c(mean(renewable), sd(renewable))
+hydro <- history[, 'Hydroelectric Power Consumption']
+third_statistic <- c(mean(hydro), sd(hydro))
+general_statistic <- data.frame(statement, first_statistic, second_statistic, third_statistic)
+p1 <- general_statistic %>% gt() %>% tab_options(table.width = pct(100)) %>% tab_header(title = 'Figure 1: Summary Statistics', subtitle = 'time series from 1949 to 2023') %>% cols_label(statement = '', first_statistic = 'Total Biomass Energy Production', second_statistic = 'Total Renewable Energy Production', third_statistic = 'Hydroelectric Power Consumption')
+p1
+```
+
+
+## Question 4
+Display and interpret the time series plot for each of these variables. Try to make your plot as informative as possible by writing titles, labels, etc. For each plot add a horizontal line at the mean of each series in a different color.
+
+```{r, message = FALSE, warning = FALSE}
+p2 <- autoplot(biomass) + geom_line(color = '#0096FF', linewidth = 2) + geom_smooth(color = '#F52757', linewidth = 1) + geom_hline(yintercept = mean(biomass), color = '#27F573', linewidth = 1, linetype = 'dashed') + geom_point(color = '#000000', alpha = 0.8, size = 2) + theme_update() + labs(title = 'Figure 2: Time Series For Total Biomass Energy Production', subtitle = 'from 1949 to 2023', x = 'Year', y = '(Trillion Btu)')
+p2
+p3 <- autoplot(renewable) + geom_line(color = '#0096FF', linewidth = 2) + geom_smooth(color = '#F52757', linewidth = 1) + geom_hline(yintercept = mean(renewable), color = '#27F573', linewidth = 1, linetype = 'dashed') + geom_point(color = '#000000', alpha = 0.8, size = 2) + theme_update() + labs(title = 'Figure 3: Time Series For Total Renewable Energy Production', subtitle = 'from 1949 to 2023', x = 'Year', y = '(Trillion Btu)')
+p3
+p4 <- autoplot(hydro) + geom_line(color = '#0096FF', linewidth = 2) + geom_smooth(color = '#F52757', linewidth = 1) + geom_hline(yintercept = mean(hydro), color = '#27F573', linewidth = 1, linetype = 'dashed') + geom_point(color = '#000000', alpha = 0.8, size = 2) + theme_update() + labs(title = 'Figure 4: Time Series For Hydroelectric Power Consumption', subtitle = 'from 1949 to 2023', x = 'Year', y = '(Trillion Btu)')
+p4
+```
+
+
+> For 75 years, the total biomass energy production has been increasing. Particularly, between 1970 and 1980, the total biomass energy production increased rapidly. The growth was more considerable after 2000. For 75 years, the total renewable energy production has also been increasing. The growth was also more considerable after 2000. Before 1980, the hydroelectric power consumption seemed to increase steadily. However, after 1980, with apparent fluctuations, the hydroelectric power consumption had a declining tendency.
+
+
+## Question 5
+Compute the correlation between these three series. Are they significantly correlated? Explain your answer.
+
+```{r, message = FALSE, warning = FALSE}
+correlate <- cor(history)
+correlate
+```
+
+
+> The correlation coefficient between total biomass energy production and total renewable energy production is 0.9861982, which may indicate a very strong positive correlation. There is a moderate positive correlation between hydroelectric power consumption and the rest.
+
+
+## Question 6
+Compute the autocorrelation function from lag 1 up to lag 40 for these three variables. What can you say about these plots? Do the three of them have the same behavior?
+
+```{r, message = FALSE, warning = FALSE}
+first_acf <- Acf(biomass, lag.max = 40, type = 'correlation', plot = TRUE)
+first_acf
+second_acf <- Acf(renewable, lag.max = 40, type = 'correlation', plot = TRUE)
+second_acf
+third_acf <- Acf(hydro, lag.max = 40, type = 'correlation', plot = TRUE)
+third_acf
+```
+
+
+> The behavior of total biomass energy production is similar to that of total renewable energy production. For both total biomass energy production and total renewable energy production, the coefficient becomes negative with lag 29. Hydroelectric power consumption behave differently because its coefficient becomes negative with lag 18. This faster decline may indicate that the temporal dependence is weaker for hydroelectric power consumption.
+
+
+## Question 7
+Compute the partial autocorrelation function from lag 1 to lag 40 for these three variables. How these plots differ from the ones in Q6?
+
+```{r, message = FALSE, warning = FALSE}
+first_pacf <- Pacf(biomass, lag.max = 40, plot = TRUE)
+first_pacf
+second_pacf <- Pacf(renewable, lag.max = 40, plot = TRUE)
+second_pacf
+third_pacf <- Pacf(hydro, lag.max = 40, plot = TRUE)
+third_pacf
+```
+
+
+> Coefficients no longer follow a declining trend. PACF eliminates the influence of intermediate variables.
+

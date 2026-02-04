@@ -1,0 +1,201 @@
+---
+title: 'ENV 790.30 - Time Series Analysis for Energy Data | Spring 2026'
+subtitle: 'Assignment 3 - Due date 02/03/26'
+author: 'Leo Zhang'
+output: pdf_document
+geometry: margin = 1cm
+---
+
+
+```{r chunk_1, message = FALSE, warning = FALSE}
+library(cowplot)
+library(forecast)
+library(Kendall)
+library(readxl)
+library(tidyverse)
+library(tseries)
+```
+
+
+## Directions
+
+You should open the .rmd file corresponding to this assignment on RStudio. The file is available on our class repository on Github.
+
+Once you have the file open on your local machine the first thing you will do is rename the file such that it includes your first and last name (e.g., 'LuanaLima_TSA_A03_Sp25.Rmd'). Then change 'Student Name' on line 4 with your name.
+
+Then you will start working through the assignment by **creating code and output** that answer each question. Be sure to use this assignment document. Your report should contain the answer to each question and any plots/tables you obtained (when applicable).
+
+Please keep this R code chunk options for the report. It is easier for us to grade when we can see code and output together. And the tidy.opts will make sure that line breaks on your code chunks are automatically added for better visualization.
+
+
+When you have completed the assignment, **Knit** the text and code into a single PDF file. Submit this pdf using Sakai.
+
+## Questions
+
+Consider the same data you used for A2 from the spreadsheet 'Table_10.1_Renewable_Energy_Production_and_Consumption_by_Source.xlsx'. The data comes from the US Energy Information and Administration and corresponds to the December 2025 Monthly Energy Review. This time you will work only with the following columns: 
+**Total Renewable Energy Production**; and 
+**Hydroelectric Power Consumption**.
+
+Create a data frame structure with these two time series only.
+
+R packages needed for this assignment:'forecast','tseries', and 'Kendall'. Install these packages, if you haven't done yet. Do not forget to load them before running your script, since they are NOT default packages.\\
+
+
+```{r chunk_2, message = FALSE, warning = FALSE}
+outlook <- read_excel('./Data/Table_10.1_Renewable_Energy_Production_and_Consumption_by_Source.xlsx', sheet = 'Annual Data', skip = 10)
+outlook <- outlook[-c(1), ]
+outlook <- outlook %>% select('Annual Total', 'Total Renewable Energy Production', 'Hydroelectric Power Consumption')
+outlook <- outlook %>% mutate(across(c('Annual Total', 'Total Renewable Energy Production', 'Hydroelectric Power Consumption'), as.numeric))
+history <- ts(outlook[,-c(1)], start = 1949, end = 2024, frequency = 1)
+```
+
+
+##Trend Component
+
+### Q1
+
+For each series (Total Renewable Production and Hydroelectric Consumption) create three plots arranged in a row (side-by-side): (1) time series plot, (2) ACF, (3) PACF. Use cowplot::plot_grid() to place them in a grid.
+
+
+```{r chunk_3, message = FALSE, warning = FALSE}
+p1 <- autoplot(history[, 1]) + geom_line(color = '#0096FF', linewidth = 1) + geom_smooth(color = '#F52757', linewidth = 1, linetype = 'dashed') + geom_point(color = '#000000', alpha = 0.8, size = 2) + theme_update() + labs(title = 'Time Series For Total Renewable Energy Production', subtitle = 'From 1949 To 2024', x = 'Year', y = '(Trillion Btu)')
+p2 <- autoplot(history[, 2]) + geom_line(color = '#0096FF', linewidth = 1) + geom_smooth(color = '#F52757', linewidth = 1, linetype = 'dashed') + geom_point(color = '#000000', alpha = 0.8, size = 2) + theme_update() + labs(title = 'Time Series For Hydroelectric Power Consumption', subtitle = 'From 1949 To 2024', x = 'Year', y = '(Trillion Btu)')
+summary_first <- plot_grid(p1, p2, ncol = 1)
+summary_first
+par(mfrow = c(2,2))
+Acf(history[, 1], lag.max = 40, type = 'correlation', plot = TRUE, main = paste('Total Renewable Energy Production'))
+Pacf(history[, 1], lag.max = 40, plot = TRUE, main = paste('Total Renewable Energy Production'))
+Acf(history[, 2], lag.max = 40, type = 'correlation', plot = TRUE, main = paste('Hydroelectric Power Consumption'))
+Pacf(history[, 2], lag.max = 40, plot = TRUE, main = paste('Hydroelectric Power Consumption'))
+```
+
+
+### Q2
+
+From the plot in Q1, do the series Total Renewable Energy Production and Hydroelectric Power Consumption appear to have a trend? If yes, what kind of trend?
+
+
+> Answer: Total renewable energy production had a continually upward tendency. Hydroelectric power consumption increased before 1980. However, after 1980, it kept fluctuating with a subtly downward tendency.
+
+
+### Q3
+
+Use the *lm()* function to fit a linear trend to the two time series. Ask R to print the summary of the regression. Interpret the regression output, i.e., slope and intercept. Save the regression coefficients for further analysis.
+
+
+```{r chunk_4, message = FALSE, warning = FALSE}
+t <- c(1:76)
+renewable_first_model <- lm(history[, 1] ~ t)
+summary(renewable_first_model)
+beta0_renewable_first = as.numeric(renewable_first_model$coefficients[1])
+beta1_renewable_first = as.numeric(renewable_first_model$coefficients[2])
+hydro_first_model <- lm(history[, 2] ~ t)
+summary(hydro_first_model)
+beta0_hydro_first = as.numeric(hydro_first_model$coefficients[1])
+beta1_hydro_first = as.numeric(hydro_first_model$coefficients[2])
+```
+
+
+> Answer: In 1948, the total renewable energy production was theoretically 721.210 Trillion Btu. If one year passes, the total renewable energy production might increase by 83.612 Trillion Btu. Given the very small p-value for coefficients and F-statistic, the linear model might be considerable.
+
+> Answer: In 1948, the hydroelectric power consumption was theoretically 567.6670 Trillion Btu. If one year passes, the hydroelectric power consumption might increase by 6.8828 Trillion Btu. Given the very small p-value for coefficients and F-statistic, the linear model might be also considerable. However, since the adjusted R-squared is lower, the accuracy about hydroelectric power consumption might be smaller than that about total renewable energy production.
+
+
+### Q4
+
+Use the regression coefficients to detrend each series (subtract fitted linear trend). Plot detrended series and compare with the original time series from Q1. Describe what changed.
+
+
+```{r chunk_5, message = FALSE, warning = FALSE}
+detrend_outlook <- outlook %>% mutate(r1 = `Total Renewable Energy Production` - (beta0_renewable_first + beta1_renewable_first * t), h1 = `Hydroelectric Power Consumption` - (beta0_hydro_first + beta1_hydro_first * t))
+detrend_history <- ts(detrend_outlook[,-c(1)], start = 1949, end = 2024, frequency = 1)
+p3 <- autoplot(detrend_history[, 3]) + geom_line(color = '#0096FF', linewidth = 1) + geom_smooth(color = '#F52757', linewidth = 1, linetype = 'dashed') + geom_point(color = '#000000', alpha = 0.8, size = 2) + theme_update() + labs(title = 'Detrended Time Series For Total Renewable Energy Production', subtitle = 'From 1949 To 2024', x = 'Year', y = '(Trillion Btu)')
+p4 <- autoplot(detrend_history[, 4]) + geom_line(color = '#0096FF', linewidth = 1) + geom_smooth(color = '#F52757', linewidth = 1, linetype = 'dashed') + geom_point(color = '#000000', alpha = 0.8, size = 2) + theme_update() + labs(title = 'Detrended Time Series For Hydroelectric Power Consumption', subtitle = 'From 1949 To 2024', x = 'Year', y = '(Trillion Btu)')
+summary_second <- plot_grid(p3, p4, ncol = 1)
+summary_second
+```
+
+
+> Answer: For total renewable energy production, there is a quadratic trend. The minimum approximately occurs at 2000.
+
+> Answer: For hydroelectric power consumption, there is also a quadratic trend. The maximum approximately occurs at 1985.
+
+
+### Q5
+
+Plot ACF and PACF for the detrended series and compare with the plots from Q1. You may use plot_grid() again to get them side by side to make it easier to compare. Did the plots change? How?
+
+
+```{r chunk_6, message = FALSE, warning = FALSE}
+par(mfrow = c(2,2))
+Acf(detrend_history[, 3], lag.max = 40, type = 'correlation', plot = TRUE, main = paste('Total Renewable Energy Production'))
+Pacf(detrend_history[, 3], lag.max = 40, plot = TRUE, main = paste('Total Renewable Energy Production'))
+Acf(detrend_history[, 4], lag.max = 40, type = 'correlation', plot = TRUE, main = paste('Hydroelectric Power Consumption'))
+Pacf(detrend_history[, 4], lag.max = 40, plot = TRUE, main = paste('Hydroelectric Power Consumption'))
+```
+
+
+> Answer: PACF plots of both series did not changed apparently. However, for total renewable energy production, ACF reached the minimum with lag 20, but it rebounded to become positve with lag 30.
+
+
+## Seasonal Component
+
+Set aside the detrended series and consider the original series again from Q1 to answer Q6 to Q8.
+
+### Q6
+
+Just by looking at the time series and the acf plots, do the series seem to have a seasonal trend? No need to run any code to answer your question. Just type in you answer below.
+
+
+> Answer: Seasonal trend cannot be identified easily.
+
+
+### Q7
+
+Use function *lm()* to fit a seasonal means model (i.e. using the seasonal dummies) to the two time series. Ask R to print the summary of the regression. Interpret the regression output. From the results, which series have a seasonal trend? Do the results match you answer to Q6?
+
+
+```{r chunk_7, message = FALSE, warning = FALSE}
+#dummy_renewable <- seasonaldummy(history[, 1])
+#renewable_second_model <- lm(history[, 1] ~ dummy_renewable)
+#summary(renewable_second_model)
+#beta0_renewable_second = as.numeric(renewable_second_model$coefficients[1])
+#beta1_renewable_second = as.numeric(renewable_second_model$coefficients[2])
+#dummy_hydro <- seasonaldummy(history[, 2])
+#hydro_second_model <- lm(history[, 2] ~ dummy_hydro)
+#summary(hydro_second_model)
+#beta0_hydro_second = as.numeric(hydro_second_model$coefficients[1])
+#beta1_hydro_second = as.numeric(hydro_second_model$coefficients[2])
+```
+
+
+### Q8
+
+Use the regression coefficients from Q7 to deseason the series. Plot the deseason series and compare with the plots from part Q1. Did anything change?
+
+
+```{r chunk_8, message = FALSE, warning = FALSE}
+#component_renewable <- (beta0_renewable_second + beta1_renewable_second %*% dummy_renewable)
+#component_hydro <- (beta0_hydro_second + beta1_hydro_second %*% dummy_hydro)
+#deseason_outlook <- detrend_outlook %>% mutate(r2 = r1 - component_renewable, h2 = h1 - component_hydro)
+#deseason_history <- ts(deseason_outlook[,-c(1)], start = 1949, end = 2024, frequency = 1)
+#p5 <- autoplot(deseason_history[, 5]) + geom_line(color = '#0096FF', linewidth = 1) + geom_smooth(color = '#F52757', linewidth = 1, linetype = 'dashed') + geom_point(color = '#000000', alpha = 0.8, size = 2) + theme_update() + labs(title = 'Deseasoned Time Series For Total Renewable Energy Production', subtitle = 'From 1949 To 2024', x = 'Year', y = '(Trillion Btu)')
+#p6 <- autoplot(deseason_history[, 6]) + geom_line(color = '#0096FF', linewidth = 1) + geom_smooth(color = '#F52757', linewidth = 1, linetype = 'dashed') + geom_point(color = '#000000', alpha = 0.8, size = 2) + theme_update() + labs(title = 'Deseasoned Time Series For Hydroelectric Power Consumption', subtitle = 'From 1949 To 2024', x = 'Year', y = '(Trillion Btu)')
+#summary_third <- plot_grid(p5, p6, ncol = 1)
+#summary_third
+```
+
+
+### Q9
+
+Plot ACF and PACF for the deseason series and compare with the plots from Q1. You may use plot_grid() again to get them side by side. Did the plots change? How?
+
+
+```{r chunk_9, message = FALSE, warning = FALSE}
+#par(mfrow = c(2,2))
+#Acf(deseason_history[, 5], lag.max = 40, type = 'correlation', plot = TRUE, main = paste('Total Renewable Energy Production'))
+#Pacf(deseason_history[, 5], lag.max = 40, plot = TRUE, main = paste('Total Renewable Energy Production'))
+#Acf(deseason_history[, 6], lag.max = 40, type = 'correlation', plot = TRUE, main = paste('Hydroelectric Power Consumption'))
+#Pacf(deseason_history[, 6], lag.max = 40, plot = TRUE, main = paste('Hydroelectric Power Consumption'))
+```
+

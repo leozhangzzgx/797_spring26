@@ -222,8 +222,6 @@ Look at the twice differenced series to identify model order.
 
 ```{r}
 
-
-
 ```
 
 ## Automatically fitting seasonal ARIMA to original series

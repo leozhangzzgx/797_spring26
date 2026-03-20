@@ -4,21 +4,28 @@ author: "Luana Lima"
 output: pdf_document
 editor_options: 
   chunk_output_type: console
+  markdown: 
+    wrap: 72
 ---
 
 ## Setting R code chunk options
 
-First R code chunk is used for setting the options for all R code chunks. The choice echo=TRUE means both code and output will appear on report, include = FALSE neither code nor output is printed.
+First R code chunk is used for setting the options for all R code
+chunks. The choice echo=TRUE means both code and output will appear on
+report, include = FALSE neither code nor output is printed.
 
-```{r setup, include=FALSE} 
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,tidy.opts=list(width.cutoff=80), tidy=FALSE) 
 ```
 
 ## Loading packages and initializing
 
-Second R code chunk is for loading packages. By setting message = FALSE, the code will appear but not the output. 
+Second R code chunk is for loading packages. By setting message = FALSE,
+the code will appear but not the output.
 
 ```{r package, message=FALSE}
+library(lubridate)
+library(ggplot2)
 library(forecast)  
 library(Kendall)
 library(tseries)
@@ -29,7 +36,10 @@ library(cowplot)
 
 ## Importing data
 
-For this module we will work with monthly average for electricity retail price in US. The data is from the U.S. Energy Information Administration and can be download [here][https://www.eia.gov/electricity/data/browser/#/topic/7?agg=2,0,1&geo=g&freq=M%2013:41:41%20GMT-0500%20(EST)]. 
+For this module we will work with monthly average for electricity retail
+price in US. The data is from the U.S. Energy Information Administration
+and can be download
+[here][[https://www.eia.gov/electricity/data/browser/#/topic/7?agg=2,0,1&geo=g&freq=M%2013:41:41%20GMT-0500%20(EST)](https://www.eia.gov/electricity/data/browser/#/topic/7?agg=2,0,1&geo=g&freq=M%2013:41:41%20GMT-0500%20(EST)){.uri}].
 
 ```{r}
 
@@ -60,7 +70,8 @@ summary(electricity_price_processed)
 
 ## Transforming data into time series object
 
-Many of the functions we will use require a time series object. You can transform your data in a time series using the function *ts()*. 
+Many of the functions we will use require a time series object. You can
+transform your data in a time series using the function *ts()*.
 
 ```{r}
 ts_electricity_price <- ts(electricity_price_processed[,2:(nvar+1)],
@@ -92,10 +103,11 @@ PACF_Plot <- Pacf(electricity_price_processed$Residential, lag = 40)
 
 ```
 
+## Decomposing the time series
 
-## Decomposing the time series 
-
-The plots from the previous section show the data has a seasonal component. Since we are working with non-seasonal ARIMA, we need to decompose the series and eliminate the seasonality.
+The plots from the previous section show the data has a seasonal
+component. Since we are working with non-seasonal ARIMA, we need to
+decompose the series and eliminate the seasonality.
 
 ```{r}
 #Using R decompose function
@@ -106,12 +118,16 @@ plot(decompose_residential_price)
 
 ```
 
-This time we will not remove seasonality to enter the Arima(). But we still need to remove seasonal component to run stationarity test and find the order of the non-seasonal part of the ARIMA, i.e., (p,d,q).
-
+This time we will not remove seasonality to enter the Arima(). But we
+still need to remove seasonal component to run stationarity test and
+find the order of the non-seasonal part of the ARIMA, i.e., (p,d,q).
 
 ## Modeling the non-seasonal part
 
-Remember from previous scripts that the electricity price series has a stochastic trend. A useful function to help determine how many times you should difference your series is the ndiffs() from package 'forecast'.
+Remember from previous scripts that the electricity price series has a
+stochastic trend. A useful function to help determine how many times you
+should difference your series is the ndiffs() from package 'forecast'.
+
 ```{r}
 #Creating non-seasonal residential price time series
 deseasonal_residential_price <- seasadj(decompose_residential_price)  
@@ -156,7 +172,10 @@ plot_grid(
 
 ## Modeling the seasonal part
 
-I will not cover the hypothesis test associated with deterministic and stochastic seasonal component. We will use the nsdiffs() function to find if our series need differencing at the seasonal lag or not. The function will run the statistical tests internally. 
+I will not cover the hypothesis test associated with deterministic and
+stochastic seasonal component. We will use the nsdiffs() function to
+find if our series need differencing at the seasonal lag or not. The
+function will run the statistical tests internally.
 
 ```{r}
 # Find out how many time we need to difference
@@ -215,12 +234,37 @@ plot_grid(
 
 ```
 
-Look at the twice differenced series to identify model order. 
+Look at the twice differenced series to identify model order.
 
+Note that we look at the ACF and PACF plot of the differenced series to
+try to find the order of the model. Here when we look at the first 12
+lags for ACF & PACF we don't see slow decays or cut-offs. The initial
+ACFs are negative which can be a characteristics of moving average
+models, so we will start with p=0 and q=1. We could also try p=1 and
+q=1. And we know from ndiffs that d=1.
+
+Now let's look at seasonal lags only (12,24,36,48). ACF has one spike at
+12 and PACF has 2 spikes one at 12 and one at 24. This is an indication
+of a seasonal moving average (SMA). Therefore the order of seasonal
+component is P=0 and Q=1. We know from nsdiffs that D=1.
 
 ## Manually fitting seasonal ARIMA to original series
 
 ```{r}
+
+SARIMA_manual <- Arima(ts_electricity_price[,"Residential"],
+                       order=c(1,1,1),
+                       seasonal=c(0,1,1),
+                       include.drift=FALSE)
+print(SARIMA_manual)
+
+plot_grid(
+  autoplot(SARIMA_manual$residuals),
+  autoplot(Acf(SARIMA_manual$residuals,lag.max=40,plot=FALSE),series="Residuals"),
+  autoplot(Pacf(SARIMA_manual$residuals,lag.max=40,plot=FALSE),series="Residuals"),
+  nrow=1,ncol=3
+)
+
 
 ```
 
@@ -228,20 +272,53 @@ Look at the twice differenced series to identify model order.
 
 ```{r}
 
+SARIMA_autofit <- auto.arima(ts_electricity_price[,"Residential"])
+print(SARIMA_autofit)
 
+plot_grid(
+  autoplot(SARIMA_autofit$residuals),
+  autoplot(Acf(SARIMA_autofit$residuals,lag.max=40,plot=FALSE),main=""),
+  autoplot(Pacf(SARIMA_autofit$residuals,lag.max=40,plot=FALSE),main=""),
+  nrow=1,ncol=3
+)
 
 
 ```
 
-
 ## Automatically fitting ARIMA to deseasonal series
 
-Recall from M6 that the best fit for the non-seasonal time series is a ARIMA(1,1,2) with drift.
+Recall from M6 that the best fit for the non-seasonal time series is a
+ARIMA(2,1,2) with drift.
 
 ```{r}
 
+ARIMA_autofit <- auto.arima(deseasonal_residential_price,max.D=0,max.P = 0,max.Q=0)
+print(ARIMA_autofit)
 
+plot_grid(
+  autoplot(ARIMA_autofit$residuals),
+  autoplot(Acf(ARIMA_autofit$residuals,lag.max=40,plot=FALSE),main=""),
+  autoplot(Pacf(ARIMA_autofit$residuals,lag.max=40,plot=FALSE),main=""),
+  nrow=1,ncol=3
+)
 
 ```
 
 ## Discussion: Which one to do? ARIMA or SARIMA?
+
+-   By AIC: ARIMA (on deseasonalized data) has much lower AIC (-192.76),
+    SARIMA best model has AIC around -169.
+
+If you compare these directly, ARIMA looks better. But **you cannot
+directly compare** ARIMA on deseasonalized series with SARIMA on
+original series because they are modeling different dependent variables.
+
+-   By Residuals Plots: Both SARIMA and ARIMA residuals look reasonably
+    white No dramatic seasonal spikes remain Both are statistically
+    acceptable So statistically, both approaches “work.”
+
+If your goal is forecast the original electricity price series then
+SARIMA is more coherent. Because: 
+* It models trend and seasonality jointly 
+* It keeps the stochastic seasonal structure
+* No need to manually re-add seasonal component

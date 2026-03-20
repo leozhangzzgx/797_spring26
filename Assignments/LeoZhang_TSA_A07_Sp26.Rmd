@@ -1,0 +1,209 @@
+---
+title: 'ENV 797 - Time Series Analysis for Energy and Environment Applications | Spring 2026'
+subtitle: 'Assignment 7 - Due date 03/06/26'
+author: 'Leo Zhang'
+output: pdf_document
+geometry: margin = 2.54cm
+---
+
+## Directions
+
+You should open the .rmd file corresponding to this assignment on RStudio. The file is available on our class repository on Github. And to do so you will need to fork our repository and link it to your RStudio.  
+
+Once you have the file open on your local machine the first thing you will do is rename the file such that it includes your first and last name (e.g., "LuanaLima_TSA_A07_Sp26.Rmd"). Then change "Student Name" on line 4 with your name. 
+
+Then you will start working through the assignment by  **creating code and output** that answer each question. Be sure to use this assignment document. Your report should contain the answer to each question and any plots/tables you obtained (when applicable).
+
+When you have completed the assignment, **Knit** the text and code into a single PDF file. Submit this pdf using Sakai. 
+
+Packages needed for this assignment: "forecast","tseries". Do not forget to load them before running your script, since they are NOT default packages.\\
+
+## Set up
+
+```{r chunk_1, message = FALSE, warning = FALSE}
+#Load required packages here.
+knitr::opts_chunk$set(tidy = TRUE, tidy.opts = list(width.cutoff = 20))
+library(forecast)
+library(Kendall)
+library(tidyverse)
+library(tseries)
+```
+
+## Importing and processing the data set
+
+Consider the data from the file "Net_generation_United_States_all_sectors_monthly.csv". The data corresponds to the monthly net generation from January 2001 to December 2020 by source and is provided by the US Energy Information and Administration. **You will work with the natural gas column only**.
+
+
+### Q1
+
+Import the csv file and create a time series object for natural gas. Make you sure you specify the **start=** and **frequency=** arguments. Plot the time series over time, ACF and PACF.
+
+```{r chunk_2, message = FALSE, warning = FALSE}
+total <- read.csv('./Data/Net_generation_United_States_all_sectors_monthly.csv', skip = 4)
+useful <- total |> select(Month, natural.gas.thousand.megawatthours) |> rename(natural_gas = natural.gas.thousand.megawatthours) |> mutate(Month = my(Month)) |> arrange(Month)
+history_first <- ts(useful[, 'natural_gas'], start = c(2001, 1), frequency = 12)
+p1 <- autoplot(history_first) + geom_line(linewidth = 1, color = '#0096FF') + geom_smooth(linewidth = 1, color = '#E30B5C', linetype = 'dashed', method = 'loess', se = FALSE) + theme_gray() + labs(title = 'Net Electricity Generation From Natural Gas', subtitle = 'Original Time Series From 2001 To 2020', x = 'year', y = '(thousand MWh)')
+p1
+p2 <- autoplot(Acf(history_first, lag.max = 120, plot = FALSE), main = 'ACF For Original Time Series') + theme_gray()
+p2
+p3 <- autoplot(Pacf(history_first, lag.max = 120, plot = FALSE), main = 'PACF For Original Time Series') + theme_gray()
+p3
+```
+
+### Q2
+
+Using the $decompose()$ and the $seasadj()$ functions create a series without the seasonal component, i.e., a deseasonalized natural gas series. Plot the deseasonalized series over time and corresponding ACF and PACF. Compare with the plots obtained in Q1.
+
+```{r chunk_3, message = FALSE, warning = FALSE}
+history_second <- seasadj(decompose(history_first, 'additive'))
+p4 <- autoplot(history_second) + geom_line(linewidth = 1, color = '#0096FF') + geom_smooth(linewidth = 1, color = '#E30B5C', linetype = 'dashed', method = 'loess', se = FALSE) + theme_gray() + labs(title = 'Net Electricity Generation From Natural Gas', subtitle = 'Deseasonalized Time Series From 2001 To 2020', x = 'year', y = '(thousand MWh)')
+p4
+p5 <- autoplot(Acf(history_second, lag.max = 120, plot = FALSE), main = 'ACF For Deseasonalized Time Series') + theme_gray()
+p5
+p6 <- autoplot(Pacf(history_second, lag.max = 120, plot = FALSE), main = 'PACF For Deseasonalized Time Series') + theme_gray()
+p6
+```
+
+
+> Answer: Seasonality almost vanishes, but the upward trend is kept. Without distraction, it is easier to identify the AR process from ACF and PACF plots.
+
+
+## Modeling the seasonally adjusted (i.e., the deseasonalized series)
+
+### Q3
+
+Run the ADF test and Mann Kendall test on the deseasonalized data from Q2. Report and explain the results.
+
+```{r chunk_4, message = FALSE, warning = FALSE}
+print('Results for ADF Test (Deseasonalized Data)')
+adf.test(history_second, alternative = 'stationary')
+MK_second <- MannKendall(history_second)
+print('Results for Mann Kendall Test (Deseasonalized Data)')
+summary(MK_second)
+```
+
+
+> Answer: Given the low p-value from ADF test, the time series might be stationary. Given the very low p-value from Mann Kendall test, there is still a trend in the time series.
+
+
+### Q4
+
+Using the plots from Q2 and test results from Q3 identify the ARIMA model parameters $p,d$ and $q$. Note that in this case because you removed the seasonal component prior to identifying the model you don't need to worry about seasonal component. Clearly state your criteria and any additional function in R you might use. DO NOT use the $auto.arima()$ function. You will be evaluated on ability to understand the ACF/PACF plots and interpret the test results.
+
+```{r chunk_5, message = FALSE, warning = FALSE}
+diff_second <- ndiffs(history_second)
+cat('Number of differencing needed: ', diff_second)
+history_second_evolve <- diff(history_second, lag = 1, differences = diff_second)
+p7 <- autoplot(history_second_evolve) + geom_line(linewidth = 1, color = '#0096FF') + geom_smooth(linewidth = 1, color = '#E30B5C', linetype = 'dashed', method = 'loess', se = FALSE) + theme_gray() + labs(title = 'Net Electricity Generation From Natural Gas', subtitle = 'Deseasonalized/Differenced Time Series From 2001 To 2020', x = 'year', y = '(thousand MWh)')
+p7
+p8 <- autoplot(Acf(history_second_evolve, lag.max = 120, plot = FALSE), main = 'ACF For Deseasonalized/Differenced Time Series') + theme_gray()
+p8
+p9 <- autoplot(Pacf(history_second_evolve, lag.max = 120, plot = FALSE), main = 'PACF For Deseasonalized/Differenced Time Series') + theme_gray()
+p9
+```
+
+
+> Answer: The time series should be differenced by 1. After modifications, the time series no longer displays trend, which is beneficial for subsequent modeling. Neither ACF nor PACF plot indicates apparent cut-offs. Thus, ARMA model might be adopted. (at the beginning, p = 1, q = 1)
+
+
+### Q5
+
+Use `Arima()` from package "forecast" to fit an ARIMA model to your series considering the order estimated in Q4. You should allow constants in the model, i.e., `include.mean = TRUE` or `include.drift=TRUE`. **Print the coefficients** in your report. Hint: use the `cat()` or `print()` function to print.
+
+```{r chunk_6, message = FALSE, warning = FALSE}
+attempt_second <- Arima(history_second, order = c(1, 1, 1), seasonal = c(0, 0, 0), include.drift = TRUE)
+cat('phi = ', attempt_second$coef[1], '    ')
+cat('theta = ', attempt_second$coef[2], '    ')
+```
+
+### Q6
+
+Now plot the residuals of the ARIMA fit from Q5 along with residuals ACF on the same window. You may use the $checkresiduals()$ function to get the plots. Do the residual series look like a white noise series? Why?
+
+```{r chunk_7, message = FALSE, warning = FALSE}
+reflection_second <- checkresiduals(attempt_second)
+reflection_second
+```
+
+
+> Answer: Despite the appearance, it is not a white noise series. Abrupt cut-offs in ACF plot are not found. The low p-value from Ljung-Box test further rejects the assumption of white noise series.
+
+
+## Modeling the original series (with seasonality)
+
+### Q7
+
+Repeat Q3-Q6 for the original series (the complete series that has the seasonal component). Note that when you model the seasonal series, you need to specify the seasonal part of the ARIMA model as well, i.e., $P$, $D$ and $Q$.
+
+```{r chunk_8, message = FALSE, warning = FALSE}
+print('Results for ADF Test (Original Data)')
+adf.test(history_first, alternative = 'stationary')
+MK_first <- SeasonalMannKendall(history_first)
+print('Results for Mann Kendall Test (Original Data)')
+summary(MK_first)
+diff_first <- nsdiffs(history_first)
+cat('Number of differencing needed: ', diff_first, '    ')
+history_first_evolve_season <- diff(history_first, lag = 12, differences = diff_first)
+history_first_evolve_trend <- diff(history_first, lag = 1, differences = diff_first)
+history_first_evolve_double <- diff(history_first_evolve_trend, lag = 12, differences = diff_first)
+p10 <- autoplot(history_first_evolve_season) + geom_line(linewidth = 1, color = '#0096FF') + geom_smooth(linewidth = 1, color = '#E30B5C', linetype = 'dashed', method = 'loess', se = FALSE) + theme_gray() + labs(title = 'Net Electricity Generation From Natural Gas', subtitle = 'Season Differenced Time Series From 2001 To 2020', x = 'year', y = '(thousand MWh)')
+p10
+p11 <- autoplot(Acf(history_first_evolve_season, lag.max = 120, plot = FALSE), main = 'ACF For Season Differenced Time Series') + theme_gray()
+p11
+p12 <- autoplot(Pacf(history_first_evolve_season, lag.max = 120, plot = FALSE), main = 'PACF For Season Differenced Time Series') + theme_gray()
+p12
+p13 <- autoplot(history_first_evolve_trend) + geom_line(linewidth = 1, color = '#0096FF') + geom_smooth(linewidth = 1, color = '#E30B5C', linetype = 'dashed', method = 'loess', se = FALSE) + theme_gray() + labs(title = 'Net Electricity Generation From Natural Gas', subtitle = 'Trend Differenced Time Series From 2001 To 2020', x = 'year', y = '(thousand MWh)')
+p13
+p14 <- autoplot(Acf(history_first_evolve_trend, lag.max = 120, plot = FALSE), main = 'ACF For Trend Differenced Time Series') + theme_gray()
+p14
+p15 <- autoplot(Pacf(history_first_evolve_trend, lag.max = 120, plot = FALSE), main = 'PACF For Trend Differenced Time Series') + theme_gray()
+p15
+p16 <- autoplot(history_first_evolve_double) + geom_line(linewidth = 1, color = '#0096FF') + geom_smooth(linewidth = 1, color = '#E30B5C', linetype = 'dashed', method = 'loess', se = FALSE) + theme_gray() + labs(title = 'Net Electricity Generation From Natural Gas', subtitle = 'Twice Differenced Time Series From 2001 To 2020', x = 'year', y = '(thousand MWh)')
+p16
+p17 <- autoplot(Acf(history_first_evolve_double, lag.max = 120, plot = FALSE), main = 'ACF For Twice Differenced Time Series') + theme_gray()
+p17
+p18 <- autoplot(Pacf(history_first_evolve_double, lag.max = 120, plot = FALSE), main = 'PACF For Twice Differenced Time Series') + theme_gray()
+p18
+attempt_first <- Arima(history_first, order = c(1, 1, 1), seasonal = c(0, 1, 1), include.drift = TRUE)
+cat('phi = ', attempt_first$coef[1], '    ')
+cat('common theta = ', attempt_first$coef[2], '    ')
+cat('seasonal theta = ', attempt_first$coef[3], '    ')
+reflection_first <- checkresiduals(attempt_first)
+reflection_first
+```
+
+
+> Answer: The time series should be differenced by 1. From the twice differenced time series, the abrupt drop of ACF and the slow decay of PACF, featuring Lag 12, 24, 36, and 48, indicate a seasonal MA component. From the twice differenced time series, the gradual decay in ACF and PACF, featuring the interval between Lag 1 and 12, 24, 36, and 48, indicates a common AR component and a common MA component. (at the beginning, p = 1, q = 1, P = 0, Q = 1)
+
+
+### Q8
+
+Compare the residual series for Q7 and Q6. Can you tell which ARIMA model is better representing the Natural Gas Series? Is that a fair comparison? Explain your response.
+
+
+> Answer: Although the model based on original data generates a higher p-value in Ljung-Box test, I cannot say that it is better. The comparison is unfair.
+
+
+## Checking your model with the auto.arima()
+
+**Please** do not change your answers for Q4 and Q7 after you ran the $auto.arima()$. It is **ok** if you didn't get all orders correctly. You will not lose points for not having the same order as the $auto.arima()$.
+
+### Q9
+
+Use the $auto.arima()$ command on the **deseasonalized series** to let R choose the model parameter for you. What's the order of the best ARIMA model? Does it match what you specified in Q4?
+
+```{r chunk_9, message = FALSE, warning = FALSE}
+fit_second <- auto.arima(history_second, max.P = 0, max.D = 0, max.Q = 0)
+fit_second
+```
+
+
+### Q10
+
+Use the $auto.arima()$ command on the **original series** to let R choose the model parameters for you. Does it match what you specified in Q7?
+
+```{r chunk_10, message = FALSE, warning = FALSE}
+fit_first <- auto.arima(history_first)
+fit_first
+```
+
